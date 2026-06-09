@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppAppRouteImport } from './routes/_app/app'
+import { Route as AppNotebookNotebookIdRouteImport } from './routes/_app/notebook.$notebookId'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -33,16 +34,23 @@ const AppAppRoute = AppAppRouteImport.update({
   path: '/app',
   getParentRoute: () => AppRoute,
 } as any)
+const AppNotebookNotebookIdRoute = AppNotebookNotebookIdRouteImport.update({
+  id: '/notebook/$notebookId',
+  path: '/notebook/$notebookId',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/app': typeof AppAppRoute
+  '/notebook/$notebookId': typeof AppNotebookNotebookIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/app': typeof AppAppRoute
+  '/notebook/$notebookId': typeof AppNotebookNotebookIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -50,13 +58,20 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
   '/_app/app': typeof AppAppRoute
+  '/_app/notebook/$notebookId': typeof AppNotebookNotebookIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/app'
+  fullPaths: '/' | '/auth' | '/app' | '/notebook/$notebookId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/app'
-  id: '__root__' | '/' | '/_app' | '/auth' | '/_app/app'
+  to: '/' | '/auth' | '/app' | '/notebook/$notebookId'
+  id:
+    | '__root__'
+    | '/'
+    | '/_app'
+    | '/auth'
+    | '/_app/app'
+    | '/_app/notebook/$notebookId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -95,15 +110,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAppRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/notebook/$notebookId': {
+      id: '/_app/notebook/$notebookId'
+      path: '/notebook/$notebookId'
+      fullPath: '/notebook/$notebookId'
+      preLoaderRoute: typeof AppNotebookNotebookIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
   AppAppRoute: typeof AppAppRoute
+  AppNotebookNotebookIdRoute: typeof AppNotebookNotebookIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAppRoute: AppAppRoute,
+  AppNotebookNotebookIdRoute: AppNotebookNotebookIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
