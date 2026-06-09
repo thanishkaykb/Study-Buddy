@@ -2,8 +2,7 @@
 export async function extractPdfText(file: File): Promise<string> {
   const pdfjs: any = await import("pdfjs-dist");
   // worker
-  // @ts-expect-error - vite worker import
-  const worker = await import("pdfjs-dist/build/pdf.worker.mjs?url");
+  const worker: any = await import(/* @vite-ignore */ "pdfjs-dist/build/pdf.worker.mjs?url");
   pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
 
   const buf = await file.arrayBuffer();
