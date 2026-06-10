@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,17 +23,21 @@ export function SourcesPanel({
   notebookId,
   sources,
   reload,
+  highlightId,
 }: {
   notebookId: string;
   sources: Source[];
   reload: () => void;
+  highlightId?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [textTitle, setTextTitle] = useState("");
   const [textBody, setTextBody] = useState("");
   const [url, setUrl] = useState("");
+  const [dragging, setDragging] = useState(false);
   const ingest = useServerFn(ingestUrl);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function addText() {
     if (!textBody.trim()) return;
@@ -72,12 +76,16 @@ export function SourcesPanel({
     }
   }
 
-  async function addPdf(files: FileList | null) {
+  async function addPdf(files: FileList | File[] | null) {
     if (!files || files.length === 0) return;
     setBusy(true);
     try {
       const { data: u } = await supabase.auth.getUser();
       for (const file of Array.from(files)) {
+        if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
+          toast.error(`Skipping ${file.name} — only PDFs are supported in drop.`);
+          continue;
+        }
         toast.info(`Parsing ${file.name}…`);
         const text = await extractPdfText(file);
         const { error } = await supabase.from("sources").insert({
@@ -107,7 +115,27 @@ export function SourcesPanel({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div
+      className={`flex flex-col h-full relative ${dragging ? "ring-2 ring-brand ring-inset" : ""}`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        addPdf(e.dataTransfer.files);
+      }}
+    >
+      {dragging && (
+        <div className="absolute inset-0 bg-brand-soft/80 backdrop-blur-sm z-10 grid place-items-center pointer-events-none">
+          <div className="text-center">
+            <Upload className="size-12 mx-auto text-brand" />
+            <div className="font-display text-xl mt-2">Drop PDFs to add</div>
+          </div>
+        </div>
+      )}
       <div className="p-4 border-b flex items-center justify-between">
         <div>
           <h2 className="font-display text-lg">Sources</h2>
@@ -115,7 +143,7 @@ export function SourcesPanel({
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="bg-brand text-brand-foreground hover:bg-brand/90">
+            <Button size="sm" className="gradient-brand text-brand-foreground">
               <Plus className="size-4 mr-1" /> Add
             </Button>
           </DialogTrigger>
@@ -130,11 +158,15 @@ export function SourcesPanel({
                 <TabsTrigger value="url">URL</TabsTrigger>
               </TabsList>
               <TabsContent value="pdf" className="pt-4">
-                <label className="block border-2 border-dashed rounded-xl p-8 text-center cursor-pointer hover:bg-surface-muted">
-                  <Upload className="size-8 mx-auto text-muted-foreground" />
-                  <div className="mt-2 font-medium">Click to upload PDF(s)</div>
+                <label
+                  className="block border-2 border-dashed rounded-xl p-8 text-center cursor-pointer hover:bg-surface-muted hover:border-brand transition-colors"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="size-8 mx-auto text-brand" />
+                  <div className="mt-2 font-medium">Click or drag to upload PDF(s)</div>
                   <div className="text-xs text-muted-foreground">Textbooks, slides, lecture notes…</div>
                   <input
+                    ref={fileInputRef}
                     type="file"
                     accept="application/pdf"
                     multiple
@@ -153,13 +185,16 @@ export function SourcesPanel({
                   value={textBody}
                   onChange={(e) => setTextBody(e.target.value)}
                 />
-                <Button onClick={addText} disabled={busy} className="bg-brand text-brand-foreground hover:bg-brand/90 w-full">
+                <Button onClick={addText} disabled={busy} className="gradient-brand text-brand-foreground w-full">
                   {busy ? "Adding…" : "Add note"}
                 </Button>
               </TabsContent>
               <TabsContent value="url" className="pt-4 space-y-3">
                 <Input placeholder="https://en.wikipedia.org/wiki/…" value={url} onChange={(e) => setUrl(e.target.value)} />
-                <Button onClick={addUrl} disabled={busy} className="bg-brand text-brand-foreground hover:bg-brand/90 w-full">
+                <p className="text-xs text-muted-foreground">
+                  We extract readable article text. Paywalled pages may need pasting as Text instead.
+                </p>
+                <Button onClick={addUrl} disabled={busy} className="gradient-brand text-brand-foreground w-full">
                   {busy ? "Fetching…" : "Fetch & add"}
                 </Button>
               </TabsContent>
@@ -173,18 +208,30 @@ export function SourcesPanel({
             <FilePlus className="size-8 mx-auto mb-2" />
             No sources yet.
             <br />
-            Add PDFs, notes or URLs.
+            <span className="text-xs">Drag PDFs anywhere here, or click Add.</span>
           </div>
         ) : (
           sources.map((s, i) => (
-            <div key={s.id} className="group flex items-start gap-2 p-2 rounded-lg hover:bg-surface-muted">
-              <div className="size-8 rounded-md bg-brand-soft text-accent-foreground grid place-items-center shrink-0">
+            <div
+              key={s.id}
+              id={`source-${s.id}`}
+              className={`group flex items-start gap-2 p-2 rounded-lg hover:bg-surface-muted ${
+                highlightId === s.id ? "source-flash" : ""
+              }`}
+            >
+              <div className="size-8 rounded-md gradient-brand text-brand-foreground grid place-items-center shrink-0">
                 {s.source_type === "url" ? <Link2 className="size-4" /> : <FileText className="size-4" />}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate">
                   <span className="text-muted-foreground mr-1">[{i + 1}]</span>
-                  {s.title}
+                  {s.url ? (
+                    <a href={s.url} target="_blank" rel="noreferrer" className="hover:text-brand">
+                      {s.title}
+                    </a>
+                  ) : (
+                    s.title
+                  )}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {s.source_type} · {Math.round(s.char_count / 1000)}k chars
