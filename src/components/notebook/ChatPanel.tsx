@@ -178,9 +178,6 @@ function MessageBubble({
   const citationMap = new Map<number, string>();
   (m.citations ?? []).forEach((c) => citationMap.set(c.n, c.source_id));
 
-  // Replace [n] in content with placeholder tokens, then render as pills
-  const parts = m.content.split(/(\[\d+\])/g);
-
   return (
     <div>
       <div className="prose-chat text-foreground">
@@ -209,7 +206,6 @@ function MessageBubble({
           ))}
         </div>
       )}
-      {void parts}
     </div>
   );
 }
