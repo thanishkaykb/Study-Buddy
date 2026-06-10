@@ -25,7 +25,6 @@ export const sendChatMessage = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    // Ownership check
     const { data: nb, error: nbErr } = await supabase
       .from("notebooks")
       .select("id")
@@ -37,7 +36,6 @@ export const sendChatMessage = createServerFn({ method: "POST" })
     const sources = await getNotebookSources(supabase, data.notebookId, userId);
     const ctx = buildSourcesContext(sources);
 
-    // Save user message first
     await supabase.from("chat_messages").insert({
       notebook_id: data.notebookId,
       user_id: userId,
@@ -45,7 +43,6 @@ export const sendChatMessage = createServerFn({ method: "POST" })
       content: data.message,
     });
 
-    // Pull recent chat history
     const { data: history } = await supabase
       .from("chat_messages")
       .select("role, content")
@@ -56,15 +53,15 @@ export const sendChatMessage = createServerFn({ method: "POST" })
     const systemPrompt = `You are StudyMind AI, an expert tutor that answers ONLY using the user's uploaded study sources.
 
 RULES:
-- Base every answer strictly on the provided SOURCES below. If something isn't in the sources, say so clearly and offer the closest related material.
+- Base every answer strictly on the provided SOURCES below. If something isn't in the sources, say so clearly.
 - Always cite sources inline using the format [1], [2] referring to the SOURCE numbers. Multiple citations allowed: [1][3].
 - Adapt response length and structure to the user's intent:
-  * If the user asks for "MCQs", "multiple choice", or a quiz → return a numbered list of high-quality MCQs (A/B/C/D), then an "Answers" section with brief explanations.
-  * If the user asks for an "11 mark", "long answer", "essay", "explain in detail", or "3 page" answer → produce a deeply structured long-form answer (intro, multiple headed sections with subpoints, examples, diagrams described in text, conclusion). Aim for ~1500-2500 words. Use markdown headings, bullet points, and tables where useful.
-  * If the user asks for a "3 mark", "short answer", "in points", or "brief" → return 3-6 crisp bullet points.
-  * If the user asks for "flashcards" → return a markdown table of Q/A.
-  * Otherwise, give a clear, well-organized explanation in markdown with the appropriate depth.
-- Use markdown formatting always: headings, bullet lists, bold key terms, tables, and short examples.
+  * MCQs / multiple choice / quiz → numbered list of high-quality MCQs (A/B/C/D), then "Answers" section with brief explanations.
+  * "11 mark" / "long answer" / "essay" / "explain in detail" / "3 page" → deeply structured long-form answer (intro, multiple headed sections, examples, conclusion). Aim for ~1500-2500 words. Use markdown headings, bullets, tables.
+  * "3 mark" / "short answer" / "in points" / "brief" → 3-6 crisp bullet points.
+  * "flashcards" → markdown table of Q/A.
+  * Otherwise: clear, well-organized markdown explanation.
+- Always use markdown: headings, bullets, bold key terms, tables, short examples.
 - Never invent facts. If sources are empty, tell the user to upload material first.
 
 SOURCES:
@@ -77,7 +74,6 @@ ${ctx || "(no sources uploaded yet)"}`;
 
     const reply = await callAI({ messages, temperature: 0.4 });
 
-    // Extract citations (which source numbers were referenced)
     const cited = new Set<number>();
     const re = /\[(\d+)\]/g;
     let m;
@@ -111,7 +107,13 @@ const StudioKind = z.enum(["summary", "notes", "flashcards", "quiz", "faq", "min
 
 export const generateStudioItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(z.object({ notebookId: z.string().uuid(), kind: StudioKind }))
+  .inputValidator(
+    z.object({
+      notebookId: z.string().uuid(),
+      kind: StudioKind,
+      focusTopics: z.array(z.string()).optional(),
+    }),
+  )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { data: nb } = await supabase
@@ -126,6 +128,10 @@ export const generateStudioItem = createServerFn({ method: "POST" })
     if (sources.length === 0) throw new Error("Upload at least one source first.");
     const ctx = buildSourcesContext(sources);
 
+    const focus = data.focusTopics?.length
+      ? `\n\nFOCUS specifically on these weak topics the student needs practice with: ${data.focusTopics.join(", ")}.`
+      : "";
+
     let title = "";
     let payload: any = {};
 
@@ -135,9 +141,9 @@ export const generateStudioItem = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "You produce concise, exam-ready study summaries in markdown. Use headings, bullet points, bold key terms. Cite sources inline as [1][2] referencing the source numbers given.",
+              "You produce concise, exam-ready study summaries in markdown. Use headings, bullets, bold key terms. Cite sources inline as [1][2].",
           },
-          { role: "user", content: `Summarize all sources for the notebook "${nb.title}".\n\n${ctx}` },
+          { role: "user", content: `Summarize all sources for the notebook "${nb.title}".${focus}\n\n${ctx}` },
         ],
         temperature: 0.3,
       });
@@ -149,9 +155,9 @@ export const generateStudioItem = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "You generate beautifully structured study notes in markdown. Use H2/H3 sections, bullet points, tables for comparisons, and bold for key terms. Cover ALL major topics in the sources. Cite sources as [1][2] inline.",
+              "You generate beautifully structured study notes in markdown. Use H2/H3 sections, bullets, tables, bold key terms. Cover ALL major topics. Cite sources as [1][2] inline.",
           },
-          { role: "user", content: `Create structured study notes for "${nb.title}".\n\n${ctx}` },
+          { role: "user", content: `Create structured study notes for "${nb.title}".${focus}\n\n${ctx}` },
         ],
         temperature: 0.3,
       });
@@ -164,9 +170,9 @@ export const generateStudioItem = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              'Return JSON only: {"cards":[{"front":"question","back":"answer"}, ...]}. Generate 15-25 high-quality flashcards covering the most important concepts. Keep answers precise (1-3 sentences).',
+              'Return JSON only: {"cards":[{"front":"question","back":"answer","topic":"topic name"}, ...]}. Generate 15-25 high-quality flashcards covering the most important concepts. Keep answers precise (1-3 sentences). Each card MUST include a short "topic" tag (1-3 words).',
           },
-          { role: "user", content: `Make flashcards from these sources:\n${ctx}` },
+          { role: "user", content: `Make flashcards from these sources:${focus}\n${ctx}` },
         ],
         temperature: 0.4,
       });
@@ -183,13 +189,13 @@ export const generateStudioItem = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              'Return JSON only: {"questions":[{"q":"...","options":["A","B","C","D"],"answer":0,"explanation":"..."}]}. Generate 10 high-quality MCQs covering different topics. The "answer" is the 0-based index of the correct option.',
+              'Return JSON only: {"questions":[{"q":"...","options":["A","B","C","D"],"answer":0,"explanation":"...","topic":"short topic tag"}]}. Generate 10 high-quality MCQs covering different topics. "answer" is 0-based index. Each question MUST include a "topic" tag (1-3 words).',
           },
-          { role: "user", content: `Create an MCQ quiz from:\n${ctx}` },
+          { role: "user", content: `Create an MCQ quiz from:${focus}\n${ctx}` },
         ],
         temperature: 0.5,
       });
-      title = "Practice Quiz";
+      title = data.focusTopics?.length ? `Targeted Quiz: ${data.focusTopics.join(", ")}` : "Practice Quiz";
       try {
         payload = JSON.parse(reply);
       } catch {
@@ -202,7 +208,7 @@ export const generateStudioItem = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              'Return JSON only: {"items":[{"q":"...","a":"..."}]}. Generate 10-15 frequently-asked questions a student would have about this material, with clear answers grounded only in the sources.',
+              'Return JSON only: {"items":[{"q":"...","a":"..."}]}. Generate 10-15 frequently-asked questions a student would have, with clear answers grounded only in the sources.',
           },
           { role: "user", content: `Generate FAQs from:\n${ctx}` },
         ],
@@ -221,7 +227,7 @@ export const generateStudioItem = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              'Return JSON only: {"root":"Central topic","branches":[{"label":"Branch","children":[{"label":"sub"},{"label":"sub","children":[{"label":"leaf"}]}]}]}. 4-7 main branches, 2-5 children each, optional grandchildren. Use concise labels (max 6 words).',
+              'Return JSON only: {"root":"Central topic","branches":[{"label":"Branch","children":[{"label":"sub"},{"label":"sub","children":[{"label":"leaf"}]}]}]}. 4-7 main branches, 2-5 children each. Concise labels (max 6 words).',
           },
           { role: "user", content: `Build a mind map for "${nb.title}" from:\n${ctx}` },
         ],
@@ -250,7 +256,79 @@ export const generateStudioItem = createServerFn({ method: "POST" })
     return saved;
   });
 
-/* -------------------- URL INGEST -------------------- */
+/* -------------------- QUIZ ATTEMPTS -------------------- */
+export const recordQuizAttempt = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      notebookId: z.string().uuid(),
+      studioItemId: z.string().uuid().optional(),
+      score: z.number().int().min(0),
+      total: z.number().int().min(1),
+      topics: z.array(z.string()).default([]),
+      details: z.array(z.any()).default([]),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { error } = await supabase.from("quiz_attempts").insert({
+      user_id: userId,
+      notebook_id: data.notebookId,
+      studio_item_id: data.studioItemId,
+      score: data.score,
+      total: data.total,
+      topics: data.topics,
+      details: data.details,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/* -------------------- URL INGEST (Readability-style extraction) -------------------- */
+function extractReadableText(html: string): { title: string; text: string; paywallLikely: boolean } {
+  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+  const ogTitle = html.match(/property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
+  const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const title = (ogTitle?.[1] || titleMatch?.[1] || h1?.[1] || "Untitled")
+    .replace(/<[^>]+>/g, "")
+    .trim()
+    .slice(0, 200);
+
+  // Strip noisy regions
+  let cleaned = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
+    .replace(/<header[\s\S]*?<\/header>/gi, " ")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
+    .replace(/<aside[\s\S]*?<\/aside>/gi, " ")
+    .replace(/<form[\s\S]*?<\/form>/gi, " ");
+
+  // Prefer <article> or main if present
+  const articleMatch = cleaned.match(/<article[\s\S]*?<\/article>/i);
+  const mainMatch = cleaned.match(/<main[\s\S]*?<\/main>/i);
+  const region = articleMatch?.[0] ?? mainMatch?.[0] ?? cleaned;
+
+  // Pull paragraphs to keep coherent text
+  const paragraphs: string[] = [];
+  const pRe = /<(p|h[1-6]|li)[^>]*>([\s\S]*?)<\/\1>/gi;
+  let m;
+  while ((m = pRe.exec(region)) !== null) {
+    const t = m[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (t.length > 20) paragraphs.push(t);
+  }
+  let text = paragraphs.join("\n\n");
+  if (text.length < 500) {
+    // fallback: dump all text
+    text = region.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  }
+  text = text.slice(0, 100000);
+
+  const paywallLikely = /paywall|subscribe to read|subscribers only|sign in to continue|metered/i.test(html) && text.length < 1500;
+  return { title, text, paywallLikely };
+}
+
 export const ingestUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
@@ -261,30 +339,44 @@ export const ingestUrl = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const res = await fetch(data.url, {
-      headers: { "User-Agent": "Mozilla/5.0 StudyMindBot" },
-    });
-    if (!res.ok) throw new Error(`Failed to fetch URL (${res.status})`);
-    const html = await res.text();
-    // Crude HTML → text
-    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-    const text = html
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 60000);
+    let html = "";
+    try {
+      const res = await fetch(data.url, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (compatible; StudyMindBot/1.0; +https://studymind.ai)",
+          Accept: "text/html,application/xhtml+xml",
+        },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      html = await res.text();
+    } catch (e: any) {
+      throw new Error(`Failed to fetch URL: ${e.message}`);
+    }
+
+    const { title, text, paywallLikely } = extractReadableText(html);
+
+    if (text.length < 200) {
+      throw new Error(
+        paywallLikely
+          ? "This page appears to be behind a paywall or requires login. Try copying the article text into a Text source instead."
+          : "Could not extract readable content. Try a Text source or a different URL.",
+      );
+    }
+
+    const noticed = paywallLikely
+      ? "\n\n[Note: this page may be partially paywalled — extracted content may be incomplete.]"
+      : "";
 
     const { data: saved, error } = await supabase
       .from("sources")
       .insert({
         notebook_id: data.notebookId,
         user_id: userId,
-        title: titleMatch?.[1]?.trim().slice(0, 200) ?? data.url,
+        title,
         source_type: "url",
         url: data.url,
-        content: text,
+        content: text + noticed,
         char_count: text.length,
       })
       .select()

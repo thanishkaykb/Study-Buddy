@@ -1,23 +1,39 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
-import { generateStudioItem } from "@/lib/ai.functions";
+import { generateStudioItem, recordQuizAttempt } from "@/lib/ai.functions";
 import { Button } from "@/components/ui/button";
-import { FileText, Layers, ListChecks, HelpCircle, GitBranch, BookOpen, Loader2, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  FileText,
+  Layers,
+  ListChecks,
+  HelpCircle,
+  GitBranch,
+  BookOpen,
+  Loader2,
+  Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Calendar,
+  Trash2,
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
+import { scheduleNext, nextDueAt } from "@/lib/srs";
+import { exportFlashcardsPdf, exportMarkdownPdf, exportQuizPdf } from "@/lib/pdf-export";
 
 type Kind = "summary" | "notes" | "flashcards" | "quiz" | "faq" | "mindmap";
 
-type Item = { id: string; kind: Kind; title: string; data: any; created_at: string };
+type Item = { id: string; kind: Kind; title: string; data: any; created_at: string; notebook_id: string };
 
 const TOOLS: { kind: Kind; label: string; icon: any; desc: string }[] = [
-  { kind: "summary", label: "Summary", icon: FileText, desc: "Concise exam-ready overview" },
-  { kind: "notes", label: "Structured Notes", icon: BookOpen, desc: "Full study notes with headings" },
-  { kind: "flashcards", label: "Flashcards", icon: Layers, desc: "Spaced-study card deck" },
-  { kind: "quiz", label: "Quiz", icon: ListChecks, desc: "MCQs with explanations" },
-  { kind: "faq", label: "FAQs", icon: HelpCircle, desc: "Common questions answered" },
+  { kind: "summary", label: "Summary", icon: FileText, desc: "Concise exam-ready" },
+  { kind: "notes", label: "Notes", icon: BookOpen, desc: "Full structured notes" },
+  { kind: "flashcards", label: "Flashcards", icon: Layers, desc: "Spaced-repetition deck" },
+  { kind: "quiz", label: "Quiz / MCQ", icon: ListChecks, desc: "10 MCQs with explanations" },
+  { kind: "faq", label: "FAQs", icon: HelpCircle, desc: "Common questions" },
   { kind: "mindmap", label: "Mind Map", icon: GitBranch, desc: "Visual topic overview" },
 ];
 
@@ -30,7 +46,7 @@ export function StudioPanel({ notebookId, sourcesCount }: { notebookId: string; 
   async function load() {
     const { data } = await supabase
       .from("studio_items")
-      .select("id, kind, title, data, created_at")
+      .select("id, kind, title, data, created_at, notebook_id")
       .eq("notebook_id", notebookId)
       .order("created_at", { ascending: false });
     setItems((data as Item[]) ?? []);
@@ -75,7 +91,7 @@ export function StudioPanel({ notebookId, sourcesCount }: { notebookId: string; 
               key={t.kind}
               onClick={() => generate(t.kind)}
               disabled={busyKind !== null}
-              className="text-left rounded-xl border bg-surface p-3 hover:border-brand transition-colors disabled:opacity-60"
+              className="text-left rounded-xl border bg-surface p-3 hover:border-brand hover:shadow-brand transition-all disabled:opacity-60"
             >
               <div className="flex items-center gap-2">
                 {busyKind === t.kind ? (
@@ -123,16 +139,43 @@ function IconFor({ kind }: { kind: Kind }) {
 }
 
 function StudioViewer({ item, onClose, onDelete }: { item: Item; onClose: () => void; onDelete: () => void }) {
+  function exportPdf() {
+    try {
+      if (item.kind === "summary" || item.kind === "notes" || item.kind === "faq") {
+        const md =
+          item.kind === "faq"
+            ? (item.data.items ?? []).map((x: any) => `## ${x.q}\n${x.a}`).join("\n\n")
+            : item.data.markdown ?? "";
+        exportMarkdownPdf(item.title, md);
+      } else if (item.kind === "flashcards") {
+        exportFlashcardsPdf(item.title, item.data.cards ?? []);
+      } else if (item.kind === "quiz") {
+        exportQuizPdf(item.title, item.data.questions ?? []);
+      } else {
+        toast.info("PDF export not supported for this type.");
+        return;
+      }
+      toast.success("PDF downloaded");
+    } catch (e: any) {
+      toast.error(e.message ?? "Export failed");
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur flex flex-col">
       <div className="border-b p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <IconFor kind={item.kind} />
-          <h2 className="font-display text-2xl">{item.title}</h2>
+          <h2 className="font-display text-2xl truncate">{item.title}</h2>
         </div>
         <div className="flex items-center gap-2">
+          {item.kind !== "mindmap" && (
+            <Button variant="outline" onClick={exportPdf}>
+              <Download className="size-4 mr-2" /> PDF
+            </Button>
+          )}
           <Button variant="ghost" onClick={onDelete} className="text-destructive">
-            Delete
+            <Trash2 className="size-4 mr-1" /> Delete
           </Button>
           <Button onClick={onClose}>Close</Button>
         </div>
@@ -144,9 +187,9 @@ function StudioViewer({ item, onClose, onDelete }: { item: Item; onClose: () => 
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.data.markdown ?? ""}</ReactMarkdown>
             </div>
           ) : item.kind === "flashcards" ? (
-            <Flashcards cards={item.data.cards ?? []} />
+            <Flashcards item={item} />
           ) : item.kind === "quiz" ? (
-            <Quiz questions={item.data.questions ?? []} />
+            <Quiz item={item} />
           ) : item.kind === "faq" ? (
             <FAQ items={item.data.items ?? []} />
           ) : item.kind === "mindmap" ? (
@@ -158,15 +201,124 @@ function StudioViewer({ item, onClose, onDelete }: { item: Item; onClose: () => 
   );
 }
 
-function Flashcards({ cards }: { cards: { front: string; back: string }[] }) {
+/* ---------------- FLASHCARDS WITH SRS ---------------- */
+type Card = { front: string; back: string; topic?: string };
+type ReviewRow = {
+  card_index: number;
+  ease: number;
+  interval_days: number;
+  repetitions: number;
+  due_at: string;
+  last_grade: number | null;
+};
+
+function Flashcards({ item }: { item: Item }) {
+  const cards: Card[] = item.data.cards ?? [];
+  const [reviews, setReviews] = useState<Record<number, ReviewRow>>({});
   const [i, setI] = useState(0);
   const [flipped, setFlipped] = useState(false);
+  const [showDueOnly, setShowDueOnly] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+
+  async function load() {
+    const { data } = await supabase
+      .from("flashcard_reviews")
+      .select("card_index, ease, interval_days, repetitions, due_at, last_grade")
+      .eq("studio_item_id", item.id);
+    const map: Record<number, ReviewRow> = {};
+    (data ?? []).forEach((r: any) => (map[r.card_index] = r));
+    setReviews(map);
+    setLoaded(true);
+  }
+  useEffect(() => {
+    load();
+  }, [item.id]);
+
   if (cards.length === 0) return <p>No cards generated.</p>;
-  const card = cards[i];
+
+  const now = Date.now();
+  const queue = cards
+    .map((_, idx) => idx)
+    .filter((idx) => {
+      if (!showDueOnly) return true;
+      const r = reviews[idx];
+      if (!r) return true; // never reviewed = due
+      return new Date(r.due_at).getTime() <= now;
+    });
+
+  const dueCount = cards.filter((_, idx) => {
+    const r = reviews[idx];
+    return !r || new Date(r.due_at).getTime() <= now;
+  }).length;
+
+  const cardIdx = queue[Math.min(i, queue.length - 1)] ?? 0;
+  const card = cards[cardIdx];
+
+  async function grade(g: 0 | 3 | 4 | 5) {
+    const r = reviews[cardIdx];
+    const prev = r
+      ? { ease: r.ease, interval: r.interval_days, repetitions: r.repetitions }
+      : { ease: 2.5, interval: 0, repetitions: 0 };
+    const next = scheduleNext(prev, g);
+    const due_at = nextDueAt(next.dueInDays);
+    const { data: u } = await supabase.auth.getUser();
+    await supabase.from("flashcard_reviews").upsert(
+      {
+        user_id: u.user!.id,
+        notebook_id: item.notebook_id,
+        studio_item_id: item.id,
+        card_index: cardIdx,
+        ease: next.ease,
+        interval_days: next.interval,
+        repetitions: next.repetitions,
+        due_at,
+        last_grade: g,
+        last_reviewed_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,studio_item_id,card_index" },
+    );
+    setFlipped(false);
+    setI((x) => x + 1);
+    load();
+  }
+
+  if (queue.length === 0) {
+    return (
+      <div className="text-center py-16">
+        <div className="size-14 rounded-2xl gradient-brand text-brand-foreground grid place-items-center mx-auto shadow-brand">
+          <Calendar className="size-7" />
+        </div>
+        <h3 className="font-display text-2xl mt-4">All done for now!</h3>
+        <p className="text-muted-foreground mt-1">No cards due. Come back later or review all.</p>
+        <Button variant="outline" className="mt-4" onClick={() => setShowDueOnly(false)}>
+          Review all anyway
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <div className="text-center text-sm text-muted-foreground mb-3">
-        Card {i + 1} of {cards.length}
+      <div className="flex items-center justify-between text-sm mb-3">
+        <div className="text-muted-foreground">
+          Card {Math.min(i, queue.length - 1) + 1} of {queue.length}
+          {card.topic && <span className="ml-2 px-2 py-0.5 rounded-full bg-brand-soft text-accent-foreground text-xs">{card.topic}</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {dueCount} / {cards.length} due
+          </span>
+          <button
+            onClick={() => {
+              setShowDueOnly((s) => !s);
+              setI(0);
+              setFlipped(false);
+            }}
+            className="text-xs text-brand hover:underline"
+          >
+            {showDueOnly ? "Show all" : "Due only"}
+          </button>
+        </div>
       </div>
       <div
         onClick={() => setFlipped((f) => !f)}
@@ -180,37 +332,112 @@ function Flashcards({ cards }: { cards: { front: string; back: string }[] }) {
           <div className="text-xs text-muted-foreground mt-6">Click to flip</div>
         </div>
       </div>
-      <div className="flex items-center justify-between mt-4">
-        <Button
-          variant="outline"
-          onClick={() => {
-            setFlipped(false);
-            setI((x) => Math.max(0, x - 1));
-          }}
-          disabled={i === 0}
-        >
-          <ChevronLeft className="size-4" /> Prev
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setFlipped(false);
-            setI((x) => Math.min(cards.length - 1, x + 1));
-          }}
-          disabled={i === cards.length - 1}
-        >
-          Next <ChevronRight className="size-4" />
-        </Button>
-      </div>
+      {flipped ? (
+        <div className="grid grid-cols-4 gap-2 mt-4">
+          <Button variant="outline" className="border-destructive text-destructive" onClick={() => grade(0)}>
+            Again
+          </Button>
+          <Button variant="outline" onClick={() => grade(3)}>
+            Hard
+          </Button>
+          <Button variant="outline" className="border-success text-success" onClick={() => grade(4)}>
+            Good
+          </Button>
+          <Button className="gradient-brand text-brand-foreground" onClick={() => grade(5)}>
+            Easy
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between mt-4">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setFlipped(false);
+              setI((x) => Math.max(0, x - 1));
+            }}
+            disabled={i === 0}
+          >
+            <ChevronLeft className="size-4" /> Prev
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setFlipped(false);
+              setI((x) => Math.min(queue.length - 1, x + 1));
+            }}
+            disabled={i >= queue.length - 1}
+          >
+            Next <ChevronRight className="size-4" />
+          </Button>
+        </div>
+      )}
+      {!loaded && <div className="text-xs text-muted-foreground mt-2">Loading review schedule…</div>}
     </div>
   );
 }
 
-function Quiz({ questions }: { questions: { q: string; options: string[]; answer: number; explanation: string }[] }) {
+/* ---------------- QUIZ ---------------- */
+type QQ = { q: string; options: string[]; answer: number; explanation: string; topic?: string };
+function Quiz({ item }: { item: Item }) {
+  const questions: QQ[] = item.data.questions ?? [];
   const [picks, setPicks] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);
+  const record = useServerFn(recordQuizAttempt);
+
   if (questions.length === 0) return <p>No questions generated.</p>;
   const correct = Object.entries(picks).filter(([i, p]) => questions[+i].answer === p).length;
+
+  async function submit() {
+    setSubmitted(true);
+    try {
+      const details = questions.map((q, i) => ({
+        topic: q.topic ?? null,
+        correct: picks[i] === q.answer,
+        picked: picks[i] ?? null,
+        answer: q.answer,
+      }));
+      const topics = Array.from(new Set(questions.map((q) => q.topic).filter(Boolean) as string[]));
+      await record({
+        data: {
+          notebookId: item.notebook_id,
+          studioItemId: item.id,
+          score: correct,
+          total: questions.length,
+          topics,
+          details,
+        },
+      });
+    } catch (e: any) {
+      toast.error(e.message ?? "Couldn't save attempt");
+    }
+  }
+
+  // topic-level performance for retake suggestion
+  const topicScore: Record<string, { c: number; t: number }> = {};
+  questions.forEach((q, i) => {
+    if (!q.topic) return;
+    const cur = topicScore[q.topic] ?? { c: 0, t: 0 };
+    cur.t += 1;
+    if (picks[i] === q.answer) cur.c += 1;
+    topicScore[q.topic] = cur;
+  });
+  const weakTopics = Object.entries(topicScore)
+    .filter(([, v]) => v.c / v.t < 0.7)
+    .map(([k]) => k);
+
+  const gen = useServerFn(generateStudioItem);
+  async function targeted() {
+    try {
+      toast.info("Generating targeted quiz…");
+      await gen({
+        data: { notebookId: item.notebook_id, kind: "quiz", focusTopics: weakTopics },
+      });
+      toast.success("New targeted quiz added to Studio");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {questions.map((q, i) => {
@@ -219,6 +446,11 @@ function Quiz({ questions }: { questions: { q: string; options: string[]; answer
           <div key={i} className="rounded-xl border bg-surface p-4">
             <div className="font-medium">
               {i + 1}. {q.q}
+              {q.topic && (
+                <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-brand-soft text-accent-foreground">
+                  {q.topic}
+                </span>
+              )}
             </div>
             <div className="mt-3 space-y-1.5">
               {q.options.map((opt, j) => {
@@ -252,15 +484,20 @@ function Quiz({ questions }: { questions: { q: string; options: string[]; answer
         );
       })}
       {!submitted ? (
-        <Button onClick={() => setSubmitted(true)} className="bg-brand text-brand-foreground hover:bg-brand/90 w-full">
+        <Button onClick={submit} className="gradient-brand text-brand-foreground w-full">
           Submit
         </Button>
       ) : (
-        <div className="text-center p-6 rounded-xl border bg-surface">
-          <div className="font-display text-3xl">
+        <div className="text-center p-6 rounded-xl border bg-surface space-y-3">
+          <div className="font-display text-4xl text-gradient-brand">
             {correct} / {questions.length}
           </div>
-          <div className="text-muted-foreground">correct</div>
+          <div className="text-muted-foreground">correct ({Math.round((correct / questions.length) * 100)}%)</div>
+          {weakTopics.length > 0 && (
+            <Button variant="outline" onClick={targeted}>
+              <Sparkles className="size-4 mr-2" /> Practice weak topics: {weakTopics.join(", ")}
+            </Button>
+          )}
         </div>
       )}
     </div>
@@ -289,7 +526,7 @@ function MindMap({ root, branches }: { root: string; branches: any[] }) {
   return (
     <div className="space-y-4">
       <div className="text-center">
-        <div className="inline-block px-6 py-3 rounded-2xl bg-brand text-brand-foreground font-display text-2xl">
+        <div className="inline-block px-6 py-3 rounded-2xl gradient-brand text-brand-foreground font-display text-2xl shadow-brand">
           {root}
         </div>
       </div>
