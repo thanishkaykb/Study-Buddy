@@ -52,6 +52,69 @@ export type Database = {
           },
         ]
       }
+      flashcard_reviews: {
+        Row: {
+          card_index: number
+          created_at: string
+          due_at: string
+          ease: number
+          id: string
+          interval_days: number
+          last_grade: number | null
+          last_reviewed_at: string | null
+          notebook_id: string
+          repetitions: number
+          studio_item_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          card_index: number
+          created_at?: string
+          due_at?: string
+          ease?: number
+          id?: string
+          interval_days?: number
+          last_grade?: number | null
+          last_reviewed_at?: string | null
+          notebook_id: string
+          repetitions?: number
+          studio_item_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          card_index?: number
+          created_at?: string
+          due_at?: string
+          ease?: number
+          id?: string
+          interval_days?: number
+          last_grade?: number | null
+          last_reviewed_at?: string | null
+          notebook_id?: string
+          repetitions?: number
+          studio_item_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flashcard_reviews_notebook_id_fkey"
+            columns: ["notebook_id"]
+            isOneToOne: false
+            referencedRelation: "notebooks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flashcard_reviews_studio_item_id_fkey"
+            columns: ["studio_item_id"]
+            isOneToOne: false
+            referencedRelation: "studio_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notebooks: {
         Row: {
           created_at: string
@@ -89,6 +152,8 @@ export type Database = {
           display_name: string | null
           email: string | null
           id: string
+          phone: string | null
+          updated_at: string
         }
         Insert: {
           avatar_url?: string | null
@@ -96,6 +161,8 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id: string
+          phone?: string | null
+          updated_at?: string
         }
         Update: {
           avatar_url?: string | null
@@ -103,8 +170,61 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id?: string
+          phone?: string | null
+          updated_at?: string
         }
         Relationships: []
+      }
+      quiz_attempts: {
+        Row: {
+          created_at: string
+          details: Json
+          id: string
+          notebook_id: string
+          score: number
+          studio_item_id: string | null
+          topics: string[]
+          total: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          details?: Json
+          id?: string
+          notebook_id: string
+          score: number
+          studio_item_id?: string | null
+          topics?: string[]
+          total: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          details?: Json
+          id?: string
+          notebook_id?: string
+          score?: number
+          studio_item_id?: string | null
+          topics?: string[]
+          total?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_attempts_notebook_id_fkey"
+            columns: ["notebook_id"]
+            isOneToOne: false
+            referencedRelation: "notebooks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_attempts_studio_item_id_fkey"
+            columns: ["studio_item_id"]
+            isOneToOne: false
+            referencedRelation: "studio_items"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sources: {
         Row: {
