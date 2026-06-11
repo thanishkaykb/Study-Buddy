@@ -117,28 +117,34 @@ export type Database = {
       }
       notebooks: {
         Row: {
+          completed: boolean
           created_at: string
           description: string | null
           emoji: string | null
           id: string
+          notes_html: string
           title: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          completed?: boolean
           created_at?: string
           description?: string | null
           emoji?: string | null
           id?: string
+          notes_html?: string
           title: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          completed?: boolean
           created_at?: string
           description?: string | null
           emoji?: string | null
           id?: string
+          notes_html?: string
           title?: string
           updated_at?: string
           user_id?: string
