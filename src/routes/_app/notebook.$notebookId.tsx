@@ -117,7 +117,7 @@ function NotebookPage() {
         </div>
       </div>
       <div className="flex-1 min-h-0">
-        <ResizablePanelGroup direction="horizontal" className="h-full">
+        <ResizablePanelGroup orientation="horizontal" className="h-full">
           <ResizablePanel defaultSize={22} minSize={15} className="bg-surface">
             <SourcesPanel
               notebookId={notebookId}
