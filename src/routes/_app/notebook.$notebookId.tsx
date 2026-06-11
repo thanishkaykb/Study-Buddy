@@ -4,7 +4,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { SourcesPanel, type Source } from "@/components/notebook/SourcesPanel";
 import { ChatPanel } from "@/components/notebook/ChatPanel";
 import { StudioPanel } from "@/components/notebook/StudioPanel";
-import { ChevronLeft } from "lucide-react";
+import { NotebookNotes } from "@/components/notebook/NotebookNotes";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
+import { Input } from "@/components/ui/input";
+import { ChevronLeft, Check, Pencil } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/notebook/$notebookId")({
   component: NotebookPage,
@@ -15,6 +23,8 @@ function NotebookPage() {
   const [notebook, setNotebook] = useState<{ id: string; title: string; emoji: string | null } | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
   const [highlightSource, setHighlightSource] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
 
   const loadSources = useCallback(async () => {
     const { data } = await supabase
@@ -42,6 +52,24 @@ function NotebookPage() {
     setTimeout(() => setHighlightSource(null), 1500);
   }, []);
 
+  async function saveTitle() {
+    const t = titleDraft.trim();
+    if (!t || !notebook) {
+      setEditingTitle(false);
+      return;
+    }
+    const { error } = await supabase
+      .from("notebooks")
+      .update({ title: t })
+      .eq("id", notebookId);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      setNotebook({ ...notebook, title: t });
+    }
+    setEditingTitle(false);
+  }
+
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="border-b bg-surface px-4 h-12 flex items-center gap-3">
@@ -50,23 +78,67 @@ function NotebookPage() {
         </Link>
         <div className="h-5 w-px bg-border" />
         <div className="text-xl">{notebook?.emoji ?? "📘"}</div>
-        <h1 className="font-display text-lg truncate">{notebook?.title ?? "Notebook"}</h1>
+        {editingTitle ? (
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            <Input
+              autoFocus
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveTitle();
+                if (e.key === "Escape") setEditingTitle(false);
+              }}
+              onBlur={saveTitle}
+              className="h-8 max-w-xs"
+            />
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={saveTitle}
+              className="p-1 text-success hover:bg-surface-muted rounded"
+            >
+              <Check className="size-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => {
+              setTitleDraft(notebook?.title ?? "");
+              setEditingTitle(true);
+            }}
+            className="group inline-flex items-center gap-1.5 min-w-0"
+            title="Click to rename"
+          >
+            <h1 className="font-display text-lg truncate">{notebook?.title ?? "Notebook"}</h1>
+            <Pencil className="size-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
+          </button>
+        )}
+        <div className="ml-auto">
+          <NotebookNotes notebookId={notebookId} />
+        </div>
       </div>
-      <div className="flex-1 grid grid-cols-12 min-h-0">
-        <aside className="col-span-3 border-r bg-surface min-h-0">
-          <SourcesPanel
-            notebookId={notebookId}
-            sources={sources}
-            reload={loadSources}
-            highlightId={highlightSource}
-          />
-        </aside>
-        <main className="col-span-6 min-h-0 bg-background">
-          <ChatPanel notebookId={notebookId} sourcesCount={sources.length} onCiteClick={handleCiteClick} />
-        </main>
-        <aside className="col-span-3 border-l bg-surface min-h-0">
-          <StudioPanel notebookId={notebookId} sourcesCount={sources.length} />
-        </aside>
+      <div className="flex-1 min-h-0">
+        <ResizablePanelGroup orientation="horizontal" className="h-full">
+          <ResizablePanel defaultSize={22} minSize={15} className="bg-surface">
+            <SourcesPanel
+              notebookId={notebookId}
+              sources={sources}
+              reload={loadSources}
+              highlightId={highlightSource}
+            />
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={38} minSize={20} className="bg-surface">
+            <StudioPanel notebookId={notebookId} sourcesCount={sources.length} />
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={40} minSize={25} className="bg-background">
+            <ChatPanel
+              notebookId={notebookId}
+              sourcesCount={sources.length}
+              onCiteClick={handleCiteClick}
+            />
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
     </div>
   );
