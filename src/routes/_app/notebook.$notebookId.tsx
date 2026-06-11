@@ -11,8 +11,10 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, Check, Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, Check, Pencil, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { exportNotebookPdf } from "@/lib/pdf-export";
 
 export const Route = createFileRoute("/_app/notebook/$notebookId")({
   component: NotebookPage,
@@ -25,6 +27,49 @@ function NotebookPage() {
   const [highlightSource, setHighlightSource] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(t);
+  }, []);
+
+  async function exportPdf() {
+    if (!notebook) return;
+    setExporting(true);
+    try {
+      const [{ data: nbRow }, { data: chat }] = await Promise.all([
+        supabase.from("notebooks").select("notes_html").eq("id", notebookId).maybeSingle(),
+        supabase
+          .from("chat_messages")
+          .select("role, content, created_at")
+          .eq("notebook_id", notebookId)
+          .order("created_at", { ascending: false })
+          .limit(30),
+      ]);
+      const recent = ((chat as any[]) ?? []).reverse() as {
+        role: "user" | "assistant";
+        content: string;
+        created_at: string;
+      }[];
+      exportNotebookPdf(notebook.title, {
+        notesHtml: (nbRow as any)?.notes_html ?? "",
+        sources: sources.map((s) => ({
+          title: s.title,
+          source_type: s.source_type,
+          url: s.url,
+          char_count: s.char_count,
+        })),
+        chat: recent,
+      });
+      toast.success("Notebook PDF downloaded");
+    } catch (e: any) {
+      toast.error(e.message ?? "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const loadSources = useCallback(async () => {
     const { data } = await supabase
@@ -112,11 +157,26 @@ function NotebookPage() {
             <Pencil className="size-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
           </button>
         )}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportPdf}
+            disabled={exporting}
+            className="gap-1.5"
+            title="Download notebook as PDF"
+          >
+            {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+            <span className="hidden sm:inline">Export</span>
+          </Button>
           <NotebookNotes notebookId={notebookId} />
         </div>
       </div>
-      <div className="flex-1 min-h-0">
+      <div
+        className={`flex-1 min-h-0 transition-all duration-300 ease-out ${
+          mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1"
+        }`}
+      >
         <ResizablePanelGroup orientation="horizontal" className="h-full">
           <ResizablePanel defaultSize={22} minSize={15} className="bg-surface">
             <SourcesPanel
