@@ -159,22 +159,29 @@ export function SourcesPanel({
               </TabsList>
               <TabsContent value="pdf" className="pt-4">
                 <label
+                  htmlFor="pdf-upload-input"
                   className="block border-2 border-dashed rounded-xl p-8 text-center cursor-pointer hover:bg-surface-muted hover:border-brand transition-colors"
-                  onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload className="size-8 mx-auto text-brand" />
                   <div className="mt-2 font-medium">Click or drag to upload PDF(s)</div>
-                  <div className="text-xs text-muted-foreground">Textbooks, slides, lecture notes…</div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="application/pdf"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => addPdf(e.target.files)}
-                    disabled={busy}
-                  />
+                  <div className="text-xs text-muted-foreground">You can select multiple files at once.</div>
                 </label>
+                <input
+                  id="pdf-upload-input"
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  multiple
+                  className="hidden"
+                  onClick={(e) => {
+                    (e.currentTarget as HTMLInputElement).value = "";
+                  }}
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    addPdf(files);
+                  }}
+                  disabled={busy}
+                />
                 {busy && <div className="mt-3 text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="size-4 animate-spin" /> Processing…</div>}
               </TabsContent>
               <TabsContent value="text" className="pt-4 space-y-3">
