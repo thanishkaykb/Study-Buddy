@@ -4,11 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Brain, MailCheck } from "lucide-react";
+import { ArrowLeft, GraduationCap, MailCheck } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/forgot-password")({
-  head: () => ({ meta: [{ title: "Reset password — StudyMind AI" }] }),
+  head: () => ({ meta: [{ title: "Reset password — Study Buddy" }] }),
   component: ForgotPage,
 });
 
@@ -43,7 +43,7 @@ function ForgotPage() {
           <ArrowLeft className="size-4" /> Back to sign in
         </Link>
         <div className="size-12 rounded-xl gradient-brand text-brand-foreground grid place-items-center">
-          {sent ? <MailCheck className="size-6" /> : <Brain className="size-6" />}
+          {sent ? <MailCheck className="size-6" /> : <GraduationCap className="size-6" />}
         </div>
         <h1 className="font-display text-2xl mt-4">
           {sent ? "Check your email" : "Forgot your password?"}
