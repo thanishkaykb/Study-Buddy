@@ -4,11 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Brain } from "lucide-react";
+import { ArrowLeft, GraduationCap } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/reset-password")({
-  head: () => ({ meta: [{ title: "Set new password — StudyMind AI" }] }),
+  head: () => ({ meta: [{ title: "Set new password — Study Buddy" }] }),
   component: ResetPage,
 });
 
@@ -39,7 +39,7 @@ function ResetPage() {
           <ArrowLeft className="size-4" /> Back to sign in
         </Link>
         <div className="size-12 rounded-xl gradient-brand text-brand-foreground grid place-items-center">
-          <Brain className="size-6" />
+          <GraduationCap className="size-6" />
         </div>
         <h1 className="font-display text-2xl mt-4">Set a new password</h1>
         <form onSubmit={submit} className="mt-6 space-y-3">
