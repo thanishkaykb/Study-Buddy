@@ -7,6 +7,7 @@ export async function callAI(opts: {
   model?: string;
   temperature?: number;
   json?: boolean;
+  maxTokens?: number;
 }): Promise<string> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("Missing LOVABLE_API_KEY");
@@ -16,6 +17,7 @@ export async function callAI(opts: {
   };
   if (opts.temperature !== undefined) body.temperature = opts.temperature;
   if (opts.json) body.response_format = { type: "json_object" };
+  if (opts.maxTokens !== undefined) body.max_tokens = opts.maxTokens;
 
   const res = await fetch(GATEWAY_URL, {
     method: "POST",
