@@ -5,11 +5,13 @@ import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Brain, ArrowLeft, MailCheck } from "lucide-react";
+import { ArrowLeft, MailCheck } from "lucide-react";
 import { toast } from "sonner";
+import { StudyBuddyLogo } from "@/components/brand-logo";
+import { ensureProfile } from "@/lib/profile.client";
 
 export const Route = createFileRoute("/auth")({
-  head: () => ({ meta: [{ title: "Sign in — StudyMind AI" }] }),
+  head: () => ({ meta: [{ title: "Sign in — Study Buddy" }] }),
   component: AuthPage,
 });
 
@@ -23,11 +25,19 @@ function AuthPage() {
   const [verifySent, setVerifySent] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/app" });
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (data.user) {
+        await ensureProfile(data.user);
+        navigate({ to: "/app" });
+      }
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (session) navigate({ to: "/app" });
+      if (session?.user) {
+        setTimeout(async () => {
+          await ensureProfile(session.user);
+          navigate({ to: "/app" });
+        }, 0);
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, [navigate]);
@@ -46,14 +56,16 @@ function AuthPage() {
           },
         });
         if (error) throw error;
-        if (data.session) {
+        if (data.session?.user) {
+          await ensureProfile(data.session.user);
           toast.success("Account created!");
         } else {
           setVerifySent(email);
         }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        if (data.user) await ensureProfile(data.user);
       }
     } catch (err: any) {
       toast.error(err.message ?? "Authentication failed");
@@ -105,12 +117,7 @@ function AuthPage() {
     <div className="min-h-screen grid md:grid-cols-2 bg-background">
       <div className="hidden md:flex relative bg-aurora p-12 flex-col justify-between overflow-hidden">
         <div className="absolute inset-0 bg-grid opacity-30" />
-        <div className="relative flex items-center gap-2">
-          <div className="size-9 rounded-xl gradient-brand text-brand-foreground grid place-items-center shadow-brand">
-            <Brain className="size-5" />
-          </div>
-          <span className="font-display text-xl">StudyMind</span>
-        </div>
+        <div className="relative"><StudyBuddyLogo /></div>
         <div className="relative">
           <h2 className="font-display text-5xl leading-[1.05]">
             Your private <span className="text-gradient-brand">AI tutor</span>, trained on your own notes.
@@ -119,7 +126,7 @@ function AuthPage() {
             Upload PDFs, notes and URLs. Get summaries, flashcards, quizzes and cited answers.
           </p>
         </div>
-        <div className="relative text-xs text-muted-foreground">© StudyMind AI</div>
+        <div className="relative text-xs text-muted-foreground">© Study Buddy</div>
       </div>
 
       <div className="flex items-center justify-center p-6 relative">
