@@ -3,17 +3,18 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Brain, BookOpen, MessageSquareText, Layers, Lightbulb, Sparkles, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { StudyBuddyLogo } from "@/components/brand-logo";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "StudyMind AI — Your AI study workspace" },
+      { title: "Study Buddy — AI study workspace" },
       {
         name: "description",
         content:
           "Upload PDFs, notes, lectures and URLs. Chat with your materials, generate summaries, flashcards, quizzes, mind maps and FAQs — all with cited answers.",
       },
-      { property: "og:title", content: "StudyMind AI — Your AI study workspace" },
+      { property: "og:title", content: "Study Buddy — AI study workspace" },
       {
         property: "og:description",
         content:
@@ -40,12 +41,7 @@ function Landing() {
     <div className="min-h-screen bg-background text-foreground relative overflow-hidden">
       <div className="absolute inset-0 bg-grid opacity-40 [mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)] pointer-events-none" />
       <header className="relative z-10 max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="size-9 rounded-xl bg-brand text-brand-foreground grid place-items-center shadow-sm">
-            <Brain className="size-5" />
-          </div>
-          <span className="font-display text-xl">StudyMind</span>
-        </div>
+        <StudyBuddyLogo />
         <div className="flex items-center gap-2">
           <Link to="/auth">
             <Button variant="ghost">Sign in</Button>
