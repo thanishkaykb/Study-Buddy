@@ -78,13 +78,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "StudyMind AI — Your AI study workspace" },
+      { title: "Study Buddy — AI study workspace" },
       {
         name: "description",
         content: "Upload PDFs, notes and URLs. Chat with cited answers, generate summaries, flashcards, quizzes and mind maps.",
       },
-      { name: "author", content: "StudyMind AI" },
-      { property: "og:title", content: "StudyMind AI" },
+      { name: "author", content: "Study Buddy" },
+      { property: "og:title", content: "Study Buddy" },
       { property: "og:description", content: "Your private AI tutor — trained on your own notes." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
