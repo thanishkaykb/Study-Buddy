@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callAI, buildSourcesContext } from "./ai-gateway.server";
+import { readableStudyText } from "./readable-text";
 
 async function getNotebookSources(supabase: any, notebookId: string, userId: string) {
   const { data, error } = await supabase
@@ -10,7 +11,10 @@ async function getNotebookSources(supabase: any, notebookId: string, userId: str
     .eq("notebook_id", notebookId)
     .eq("user_id", userId);
   if (error) throw new Error(error.message);
-  return (data ?? []) as { id: string; title: string; content: string }[];
+  return ((data ?? []) as { id: string; title: string; content: string }[]).map((source) => ({
+    ...source,
+    content: readableStudyText(source.content),
+  }));
 }
 
 /* -------------------- CHAT -------------------- */
@@ -50,7 +54,7 @@ export const sendChatMessage = createServerFn({ method: "POST" })
       .order("created_at", { ascending: true })
       .limit(20);
 
-    const systemPrompt = `You are StudyMind AI, an expert tutor that answers ONLY using the user's uploaded study sources.
+    const systemPrompt = `You are Study Buddy, an expert tutor that answers ONLY using the user's uploaded study sources.
 
 RULES:
 - Base every answer strictly on the provided SOURCES below. If something isn't in the sources, say so clearly.
@@ -62,6 +66,7 @@ RULES:
   * "flashcards" → markdown table of Q/A.
   * Otherwise: clear, well-organized markdown explanation.
 - Always use markdown: headings, bullets, bold key terms, tables, short examples.
+- Make all formulas readable in plain text. Never output raw LaTeX delimiters like $...$ or slash-heavy code; write formulas as "A + 0 = A", "A / C", "x²", "≤", "≥".
 - Never invent facts. If sources are empty, tell the user to upload material first.
 
 SOURCES:
@@ -126,7 +131,11 @@ export const generateStudioItem = createServerFn({ method: "POST" })
 
     const sources = await getNotebookSources(supabase, data.notebookId, userId);
     if (sources.length === 0) throw new Error("Upload at least one source first.");
-    const ctx = buildSourcesContext(sources);
+    const ctx = buildSourcesContext(
+      sources,
+      data.kind === "notes" ? 45000 : 22000,
+      data.kind === "notes" ? 260000 : 140000,
+    );
 
     const focus = data.focusTopics?.length
       ? `\n\nFOCUS specifically on these weak topics the student needs practice with: ${data.focusTopics.join(", ")}.`
@@ -141,7 +150,7 @@ export const generateStudioItem = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "You produce concise, exam-ready study summaries in markdown. Use headings, bullets, bold key terms. Cite sources inline as [1][2].",
+              "You produce concise, exam-ready study summaries in markdown. Use headings, bullets, bold key terms. Cite sources inline as [1][2]. Convert formulas into readable plain text; never use raw $...$ LaTeX delimiters.",
           },
           { role: "user", content: `Summarize all sources for the notebook "${nb.title}".${focus}\n\n${ctx}` },
         ],
@@ -155,11 +164,12 @@ export const generateStudioItem = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "You generate beautifully structured study notes in markdown. Use H2/H3 sections, bullets, tables, bold key terms. Cover ALL major topics. Cite sources as [1][2] inline.",
+              "You generate exhaustive, topic-wise study notes in markdown from the provided material. Capture every important detail: headings, subheadings, definitions, properties, formulas, examples, steps, comparisons, exceptions, page markers, and likely exam points. Organize point-wise under H2/H3 sections and tables where useful. Do not merely summarize. If a PDF page contains small details, include them. Cite sources inline as [1][2]. Convert all formulas into readable plain text such as A + 0 = A, A / C, x², ≤, ≥; never output raw $...$ LaTeX delimiters or unreadable slash/code notation.",
           },
-          { role: "user", content: `Create structured study notes for "${nb.title}".${focus}\n\n${ctx}` },
+          { role: "user", content: `Create complete detailed notes for "${nb.title}". Include all source content topic-wise and point-wise, not just a short summary.${focus}\n\n${ctx}` },
         ],
         temperature: 0.3,
+        maxTokens: 12000,
       });
       title = "Structured Notes";
       payload = { markdown: reply };
@@ -170,7 +180,7 @@ export const generateStudioItem = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              'Return JSON only: {"cards":[{"front":"question","back":"answer","topic":"topic name"}, ...]}. Generate 15-25 high-quality flashcards covering the most important concepts. Keep answers precise (1-3 sentences). Each card MUST include a short "topic" tag (1-3 words).',
+              'Return JSON only: {"cards":[{"front":"question","back":"answer with clear explanation","topic":"topic name"}, ...]}. Generate 20-35 high-quality flashcards covering definitions, formulas, examples, differences, and important facts. Every card MUST have a complete readable answer in "back" and a short "topic" tag (1-3 words). Convert formulas into plain readable text; never use raw $...$ LaTeX delimiters.',
           },
           { role: "user", content: `Make flashcards from these sources:${focus}\n${ctx}` },
         ],
@@ -189,7 +199,7 @@ export const generateStudioItem = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              'Return JSON only: {"questions":[{"q":"...","options":["A","B","C","D"],"answer":0,"explanation":"...","topic":"short topic tag"}]}. Generate 10 high-quality MCQs covering different topics. "answer" is 0-based index. Each question MUST include a "topic" tag (1-3 words).',
+              'Return JSON only: {"questions":[{"q":"...","options":["A","B","C","D"],"answer":0,"explanation":"...","topic":"short topic tag"}]}. Generate 10 high-quality MCQs covering different topics. "answer" is 0-based index. Each question MUST include a clear explanation and a "topic" tag (1-3 words). Convert formulas into readable plain text; never use raw $...$ LaTeX delimiters.',
           },
           { role: "user", content: `Create an MCQ quiz from:${focus}\n${ctx}` },
         ],
@@ -344,7 +354,7 @@ export const ingestUrl = createServerFn({ method: "POST" })
       const res = await fetch(data.url, {
         headers: {
           "User-Agent":
-            "Mozilla/5.0 (compatible; StudyMindBot/1.0; +https://studymind.ai)",
+            "Mozilla/5.0 (compatible; StudyBuddyBot/1.0)",
           Accept: "text/html,application/xhtml+xml",
         },
       });
