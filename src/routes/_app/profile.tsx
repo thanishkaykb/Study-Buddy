@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { User, Lock, Trash2, Phone, Mail } from "lucide-react";
 
 export const Route = createFileRoute("/_app/profile")({
-  head: () => ({ meta: [{ title: "Profile & settings — StudyMind" }] }),
+  head: () => ({ meta: [{ title: "Profile & settings — Study Buddy" }] }),
   component: ProfilePage,
 });
 
