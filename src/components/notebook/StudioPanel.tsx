@@ -14,7 +14,6 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
-  Download,
   Calendar,
   Trash2,
 } from "lucide-react";
@@ -22,7 +21,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { scheduleNext, nextDueAt } from "@/lib/srs";
-import { exportFlashcardsPdf, exportMarkdownPdf, exportQuizPdf } from "@/lib/pdf-export";
 
 type Kind = "summary" | "notes" | "flashcards" | "quiz" | "faq" | "mindmap";
 
@@ -139,28 +137,6 @@ function IconFor({ kind }: { kind: Kind }) {
 }
 
 function StudioViewer({ item, onClose, onDelete }: { item: Item; onClose: () => void; onDelete: () => void }) {
-  function exportPdf() {
-    try {
-      if (item.kind === "summary" || item.kind === "notes" || item.kind === "faq") {
-        const md =
-          item.kind === "faq"
-            ? (item.data.items ?? []).map((x: any) => `## ${x.q}\n${x.a}`).join("\n\n")
-            : item.data.markdown ?? "";
-        exportMarkdownPdf(item.title, md);
-      } else if (item.kind === "flashcards") {
-        exportFlashcardsPdf(item.title, item.data.cards ?? []);
-      } else if (item.kind === "quiz") {
-        exportQuizPdf(item.title, item.data.questions ?? []);
-      } else {
-        toast.info("PDF export not supported for this type.");
-        return;
-      }
-      toast.success("PDF downloaded");
-    } catch (e: any) {
-      toast.error(e.message ?? "Export failed");
-    }
-  }
-
   return (
     <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur flex flex-col">
       <div className="border-b p-4 flex items-center justify-between">
@@ -169,11 +145,6 @@ function StudioViewer({ item, onClose, onDelete }: { item: Item; onClose: () => 
           <h2 className="font-display text-2xl truncate">{item.title}</h2>
         </div>
         <div className="flex items-center gap-2">
-          {item.kind !== "mindmap" && (
-            <Button variant="outline" onClick={exportPdf}>
-              <Download className="size-4 mr-2" /> PDF
-            </Button>
-          )}
           <Button variant="ghost" onClick={onDelete} className="text-destructive">
             <Trash2 className="size-4 mr-1" /> Delete
           </Button>
