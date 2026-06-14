@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
 export const Route = createFileRoute("/_app/app")({
-  head: () => ({ meta: [{ title: "Your notebooks — StudyMind" }] }),
+  head: () => ({ meta: [{ title: "Your notebooks — Study Buddy" }] }),
   component: Dashboard,
 });
 
