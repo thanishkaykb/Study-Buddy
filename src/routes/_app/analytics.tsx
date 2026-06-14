@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { BarChart3, TrendingDown, TrendingUp, Target, BookOpen } from "lucide-react";
 
 export const Route = createFileRoute("/_app/analytics")({
-  head: () => ({ meta: [{ title: "Quiz analytics — StudyMind" }] }),
+  head: () => ({ meta: [{ title: "Quiz analytics — Study Buddy" }] }),
   component: AnalyticsPage,
 });
 
