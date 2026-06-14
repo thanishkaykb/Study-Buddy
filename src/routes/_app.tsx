@@ -1,9 +1,10 @@
 import { createFileRoute, Link, Outlet, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Brain, LogOut, User, BarChart3, BookOpen } from "lucide-react";
+import { LogOut, User, BarChart3, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { StudyBuddyLogo } from "@/components/brand-logo";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,10 +54,7 @@ function AppShell() {
       <header className="border-b bg-surface/80 backdrop-blur sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link to="/app" className="flex items-center gap-2">
-            <div className="size-8 rounded-xl gradient-brand text-brand-foreground grid place-items-center shadow-brand">
-              <Brain className="size-4" />
-            </div>
-            <span className="font-display text-lg">StudyMind</span>
+            <StudyBuddyLogo />
           </Link>
           <nav className="hidden md:flex items-center gap-1 text-sm">
             <Link to="/app" className="px-3 py-1.5 rounded-lg hover:bg-surface-muted flex items-center gap-1.5">
