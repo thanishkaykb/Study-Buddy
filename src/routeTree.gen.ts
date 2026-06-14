@@ -18,6 +18,7 @@ import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppAppRouteImport } from './routes/_app/app'
 import { Route as AppAnalyticsRouteImport } from './routes/_app/analytics'
 import { Route as AppNotebookNotebookIdRouteImport } from './routes/_app/notebook.$notebookId'
+import { Route as AppNotebookNotebookIdToolSlugRouteImport } from './routes/_app/notebook.$notebookId.$toolSlug'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
@@ -63,6 +64,12 @@ const AppNotebookNotebookIdRoute = AppNotebookNotebookIdRouteImport.update({
   path: '/notebook/$notebookId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppNotebookNotebookIdToolSlugRoute =
+  AppNotebookNotebookIdToolSlugRouteImport.update({
+    id: '/$toolSlug',
+    path: '/$toolSlug',
+    getParentRoute: () => AppNotebookNotebookIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -72,7 +79,8 @@ export interface FileRoutesByFullPath {
   '/analytics': typeof AppAnalyticsRoute
   '/app': typeof AppAppRoute
   '/profile': typeof AppProfileRoute
-  '/notebook/$notebookId': typeof AppNotebookNotebookIdRoute
+  '/notebook/$notebookId': typeof AppNotebookNotebookIdRouteWithChildren
+  '/notebook/$notebookId/$toolSlug': typeof AppNotebookNotebookIdToolSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -82,7 +90,8 @@ export interface FileRoutesByTo {
   '/analytics': typeof AppAnalyticsRoute
   '/app': typeof AppAppRoute
   '/profile': typeof AppProfileRoute
-  '/notebook/$notebookId': typeof AppNotebookNotebookIdRoute
+  '/notebook/$notebookId': typeof AppNotebookNotebookIdRouteWithChildren
+  '/notebook/$notebookId/$toolSlug': typeof AppNotebookNotebookIdToolSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -94,7 +103,8 @@ export interface FileRoutesById {
   '/_app/analytics': typeof AppAnalyticsRoute
   '/_app/app': typeof AppAppRoute
   '/_app/profile': typeof AppProfileRoute
-  '/_app/notebook/$notebookId': typeof AppNotebookNotebookIdRoute
+  '/_app/notebook/$notebookId': typeof AppNotebookNotebookIdRouteWithChildren
+  '/_app/notebook/$notebookId/$toolSlug': typeof AppNotebookNotebookIdToolSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -107,6 +117,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/profile'
     | '/notebook/$notebookId'
+    | '/notebook/$notebookId/$toolSlug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -117,6 +128,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/profile'
     | '/notebook/$notebookId'
+    | '/notebook/$notebookId/$toolSlug'
   id:
     | '__root__'
     | '/'
@@ -128,6 +140,7 @@ export interface FileRouteTypes {
     | '/_app/app'
     | '/_app/profile'
     | '/_app/notebook/$notebookId'
+    | '/_app/notebook/$notebookId/$toolSlug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -203,21 +216,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppNotebookNotebookIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/notebook/$notebookId/$toolSlug': {
+      id: '/_app/notebook/$notebookId/$toolSlug'
+      path: '/$toolSlug'
+      fullPath: '/notebook/$notebookId/$toolSlug'
+      preLoaderRoute: typeof AppNotebookNotebookIdToolSlugRouteImport
+      parentRoute: typeof AppNotebookNotebookIdRoute
+    }
   }
 }
+
+interface AppNotebookNotebookIdRouteChildren {
+  AppNotebookNotebookIdToolSlugRoute: typeof AppNotebookNotebookIdToolSlugRoute
+}
+
+const AppNotebookNotebookIdRouteChildren: AppNotebookNotebookIdRouteChildren = {
+  AppNotebookNotebookIdToolSlugRoute: AppNotebookNotebookIdToolSlugRoute,
+}
+
+const AppNotebookNotebookIdRouteWithChildren =
+  AppNotebookNotebookIdRoute._addFileChildren(
+    AppNotebookNotebookIdRouteChildren,
+  )
 
 interface AppRouteChildren {
   AppAnalyticsRoute: typeof AppAnalyticsRoute
   AppAppRoute: typeof AppAppRoute
   AppProfileRoute: typeof AppProfileRoute
-  AppNotebookNotebookIdRoute: typeof AppNotebookNotebookIdRoute
+  AppNotebookNotebookIdRoute: typeof AppNotebookNotebookIdRouteWithChildren
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAnalyticsRoute: AppAnalyticsRoute,
   AppAppRoute: AppAppRoute,
   AppProfileRoute: AppProfileRoute,
-  AppNotebookNotebookIdRoute: AppNotebookNotebookIdRoute,
+  AppNotebookNotebookIdRoute: AppNotebookNotebookIdRouteWithChildren,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
