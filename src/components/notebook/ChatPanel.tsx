@@ -123,7 +123,7 @@ export function ChatPanel({
             ))}
             {sending && (
               <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <Loader2 className="size-4 animate-spin" /> StudyMind is thinking…
+                <Loader2 className="size-4 animate-spin" /> Study Buddy is thinking…
               </div>
             )}
           </div>
